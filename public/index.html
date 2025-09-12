@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signal Detector Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Pharmacovigilance Signal Detector</h1>
+    </header>
+
+    <main>
+      <section class="kpis">
+        <div class="kpi" id="kpi-total">
+          <div class="kpi-label">Total reports</div>
+          <div class="kpi-value" id="total-reports">-</div>
+        </div>
+        <div class="kpi" id="kpi-flagged">
+          <div class="kpi-label">Adverse events flagged</div>
+          <div class="kpi-value" id="flagged-events">-</div>
+        </div>
+        <div class="kpi" id="kpi-signals">
+          <div class="kpi-label">New signals detected</div>
+          <div class="kpi-value" id="new-signals">-</div>
+        </div>
+        <div class="kpi kpi-list" id="kpi-risk">
+          <div class="kpi-label">Top risk drugs</div>
+          <ul id="top-risk-drugs"></ul>
+        </div>
+      </section>
+
+      <section class="charts">
+        <div class="chart-card">
+          <h3>Adverse Events over Time</h3>
+          <canvas id="chart-events-time"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Drug Classes vs Adverse Events</h3>
+          <canvas id="chart-pie"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Signal Trend (Top emerging)</h3>
+          <canvas id="chart-signal-trend"></canvas>
+        </div>
+      </section>
+
+      <section class="explorer">
+        <h2>Adverse Event Explorer</h2>
+        <div class="filters">
+          <input type="text" id="filter-drug" placeholder="Drug" />
+          <input type="text" id="filter-event" placeholder="Adverse Event" />
+          <select id="filter-sex">
+            <option value="">Sex</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+          </select>
+          <input type="number" id="filter-min-age" placeholder="Min age" />
+          <input type="number" id="filter-max-age" placeholder="Max age" />
+          <button id="btn-apply">Apply</button>
+          <input type="file" id="file-csv" accept=".csv" />
+          <button id="btn-upload">Upload CSV</button>
+        </div>
+        <div class="table-wrapper">
+          <table id="events-table">
+            <thead>
+              <tr>
+                <th>Drug</th>
+                <th>Indication</th>
+                <th>Adverse Event</th>
+                <th>Age</th>
+                <th>Sex</th>
+                <th>Outcome</th>
+                <th>Date</th>
+                <th>Signal Score</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="signals">
+        <h2>Signal Detection View</h2>
+        <div class="heatmap" id="heatmap"></div>
+        <div class="top-signals">
+          <h3>Top 5 New Signals</h3>
+          <ul id="top-signals"></ul>
+        </div>
+      </section>
+
+      <section class="nlp">
+        <h2>Narrative Notes / NLP Insights</h2>
+        <ul id="nlp-list"></ul>
+        <div id="nlp-details" class="nlp-details"></div>
+      </section>
+
+      <section class="alerts">
+        <h2>Alerts & Notifications</h2>
+        <ul id="alerts-list"></ul>
+      </section>
+    </main>
+
+    <!-- <script>
+      const API_BASE = `${location.protocol}//${location.hostname}:8000`;
+    </script> -->
+    <script src="./app.js"></script>
+  </body>
+</html>
