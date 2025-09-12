@@ -6,8 +6,13 @@ from datetime import datetime
 from pathlib import Path
 
 # --- Paths ---
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+print(f"Data path: {DATA_DIR}")
+
 DATA_PATH = DATA_DIR / "synthetic_reports.csv"
+
+print(f"Data path: {DATA_PATH}")
 
 # --- App setup ---
 app = FastAPI(title="Signal Detector API", version="0.1.0")
@@ -92,7 +97,7 @@ def get_events(
     limit: int = Query(100, ge=1, le=2000),
 ):
     df = load_df()
-
+    
     # Apply filters
     if drug:
         df = df[df["drug_name"].str.contains(drug, case=False, na=False)]
