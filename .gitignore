@@ -18,3 +18,6 @@ yarn-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Model files
+data/*.pkl
