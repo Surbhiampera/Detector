@@ -4,7 +4,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+from ai_signal_detector import AISignalDetector
+from pydantic import BaseModel
 
+# Initialize once
+detector = AISignalDetector()
+
+class SignalRequest(BaseModel):
+    sex:str
+    age: int
+    indication:str
+    drug_name: str
+    adverse_event: str
 # --- Paths ---
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
@@ -396,6 +407,59 @@ async def upload_csv(file: UploadFile = File(...)):
         
     except Exception as e:
         return {"error": f"Error processing file: {str(e)}"}
+    
+
+
+@app.post("/api/predict_signal")
+def predict_signal(req: SignalRequest):
+    """Predict signal risk for a drug-event pair using AI detector"""
+    try:
+        # Use the instance, not the class itself
+        result = detector.predict(req.model_dump())
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+    
+    
+    
+@app.get("/api/top_risk_drugs")
+def top_risk_drugs(top_n: int = 5):
+    """Compute top risk drugs based on severity + rarity + recency"""
+    df = load_df()
+    if df.empty:
+            return {"top_risk_drugs": []}
+
+    # Severity
+    severity = (
+        df["outcome"].str.lower().map({"fatal": 3, "hospitalized": 2, "not recovered": 1}).fillna(0)
+        + df["adverse_event"].str.lower().map({"seizure": 2, "liver toxicity": 3, "anaphylaxis": 3}).fillna(0)
+    )
+
+    # Rarity: inverse frequency
+    pair_counts = df.groupby(["drug_name", "adverse_event"]).size().rename("pair_count")
+    df = df.join(pair_counts, on=["drug_name", "adverse_event"])
+    rarity = 1.0 / (1.0 + df["pair_count"].astype(float))
+
+    # Recency
+    max_date = df["date_reported"].max()
+    recency = 1.0 - ((max_date - df["date_reported"]).dt.days.clip(lower=0, upper=365) / 365.0)
+
+    # Risk score
+    risk_score = (severity * 2.0) + (rarity * 3.0) + (recency * 2.0)
+    df = df.assign(risk_score=risk_score)
+
+    # Aggregate per drug-event
+    agg = (
+        df.groupby(["drug_name", "adverse_event"])
+        .agg(count=("risk_score", "size"), avg_risk=("risk_score", "mean"))
+        .sort_values("avg_risk", ascending=False)
+        .head(top_n)
+        .reset_index()
+    )
+
+    return {"top_risk_drugs": agg.to_dict(orient="records")}
+
+    
     
 if __name__ == "__main__":
     app.run(debug=False)
