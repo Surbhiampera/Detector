@@ -7,12 +7,14 @@ from sklearn.metrics import classification_report
 from pathlib import Path
 import joblib
 
+# Estimate severity per Adverse Event Report - Using basic Random Forest Model - Need to update weights for serverity calc
+
 # --- Paths ---
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_PATH = DATA_DIR / "synthetic_reports.csv"
 
 
-class AISignalDetector:
+class AICaseSeverityClassifier:
     def __init__(self, model_path=None):
         self.model_path = model_path or (DATA_DIR / "ai_model.pkl")
         self.model = None
@@ -135,7 +137,7 @@ class AISignalDetector:
 
 
 if __name__ == "__main__":
-    detector = AISignalDetector()
+    detector = AICaseSeverityClassifier()
 
     if not detector.model_path.exists():
         detector.train_model()
@@ -145,7 +147,8 @@ if __name__ == "__main__":
         "age": 45,
         "drug_name": "Atorvastatin", # Aspirin
         "indication": "Headache",
-        "adverse_event": "Liver toxicity", # Anaphylaxis
+        "adverse_event": "Liver toxicity", # Anaphylaxisamper@123.
+        
     }
     result = detector.predict(sample_input)
     print(f"Prediction: {result}")

@@ -26,6 +26,16 @@ python -m http.server 8080 --directory public
 
 Visit http://localhost:8080 in your browser.
 
+### Running the Model
+
+1. Install requirements in env
+2. Ensure synthetic_reports.csv is present in /data, then run `report_severity_model.py` (optional execution)
+3. On model save, run `test.py` which will ensure model present (else train) and use hardcoded sample.
+
+### Aim
+
+To move beyond just 'case triaging' of sorts that `report_severity_model.py` does, to true signal detection. 
+
 ## Endpoints
 
 - GET `/api/kpis`
