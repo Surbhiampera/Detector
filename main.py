@@ -427,7 +427,7 @@ def top_risk_drugs(top_n: int = 5):
     """Compute top risk drugs based on severity + rarity + recency"""
     df = load_df()
     if df.empty:
-            return {"top_risk_drugs": []}
+        return {"top_risk_drugs": []}
 
     # Severity
     severity = (
@@ -451,13 +451,64 @@ def top_risk_drugs(top_n: int = 5):
     # Aggregate per drug-event
     agg = (
         df.groupby(["drug_name", "adverse_event"])
-        .agg(count=("risk_score", "size"), avg_risk=("risk_score", "mean"))
+        .agg(
+            count=("risk_score", "size"),
+            avg_risk=("risk_score", "mean"),
+        )
         .sort_values("avg_risk", ascending=False)
         .head(top_n)
         .reset_index()
     )
 
+    # Add prediction, avg_prob (normalized risk), and rank
+    agg["prediction"] = agg["avg_risk"].apply(lambda x: "Signal" if x > 2.5 else "No Signal")
+    agg["avg_prob"] = (agg["avg_risk"] - agg["avg_risk"].min()) / (
+        agg["avg_risk"].max() - agg["avg_risk"].min() + 1e-6
+    )
+    agg["rank"] = range(1, len(agg) + 1)
+
     return {"top_risk_drugs": agg.to_dict(orient="records")}
+@app.get("/api/patient_predictions")
+def patient_predictions():
+    """Compute risk prediction for each patient (row-level)"""
+    df = load_df()
+    if df.empty:
+        return {"patients": []}
+
+    # Severity
+    severity = (
+        df["outcome"].str.lower().map({"fatal": 3, "hospitalized": 2, "not recovered": 1}).fillna(0)
+        + df["adverse_event"].str.lower().map({"seizure": 2, "liver toxicity": 3, "anaphylaxis": 3}).fillna(0)
+    )
+
+    # Rarity: inverse frequency of drug-event
+    pair_counts = df.groupby(["drug_name", "adverse_event"]).size().rename("pair_count")
+    df = df.join(pair_counts, on=["drug_name", "adverse_event"])
+    rarity = 1.0 / (1.0 + df["pair_count"].astype(float))
+
+    # Recency
+    max_date = df["date_reported"].max()
+    recency = 1.0 - ((max_date - df["date_reported"]).dt.days.clip(lower=0, upper=365) / 365.0)
+
+    # Risk score per row
+    risk_score = (severity * 2.0) + (rarity * 3.0) + (recency * 2.0)
+    df = df.assign(risk_score=risk_score)
+
+    # Normalize risk score → avg_prob
+    min_risk, max_risk = df["risk_score"].min(), df["risk_score"].max()
+    df["avg_prob"] = (df["risk_score"] - min_risk) / ((max_risk - min_risk) + 1e-6)
+
+    # Prediction label
+    df["prediction"] = df["risk_score"].apply(lambda x: "Signal" if x > 2.5 else "No Signal")
+
+    # Select relevant fields
+    result = df[
+        ["drug_name", "adverse_event", "outcome", "date_reported", "risk_score", "avg_prob", "prediction"]
+    ].reset_index(drop=True)
+
+    return {"patients": result.to_dict(orient="records")}
+
+
 
     
     
