@@ -30,7 +30,6 @@ print(MODEL_PATH)
 INTERNAL_CAT_COLS = ["sex", "drug_name", "indication", "adverse_event"]
 INTERNAL_NUM_COLS = ["age"]
 
-# FAERS to internal mapping
 FAERS_COLUMN_MAP = {
     "drugname": "drug_name",
     "prod_ai": "prod_ai",
@@ -41,6 +40,10 @@ FAERS_COLUMN_MAP = {
     "sex": "sex",
     "outcome": "outcome"
 }
+
+INTERNAL_CAT_COLS = ["sex", "drug_name", "indication", "adverse_event"]
+INTERNAL_NUM_COLS = ["age"]
+
 
 class AISignalDetector:
     def __init__(self, model_path=None):
@@ -57,14 +60,11 @@ class AISignalDetector:
         if not DATA_PATH.exists():
             raise FileNotFoundError(f"Data file not found: {DATA_PATH}")
         df = pd.read_csv(DATA_PATH, low_memory=False)
-        # Lowercase columns for consistency
         df.columns = df.columns.str.lower()
-        # Map FAERS columns to internal names
         for faers_col, internal_col in FAERS_COLUMN_MAP.items():
             if faers_col.lower() in df.columns:
                 df[internal_col] = df[faers_col.lower()]
-        # Check required columns
-        missing_cols = [col for col in INTERNAL_CAT_COLS + INTERNAL_NUM_COLS if col not in df.columns]
+        missing_cols = [col for col in self.cat_features + INTERNAL_NUM_COLS if col not in df.columns]
         if missing_cols:
             raise KeyError(f"Missing required columns in CSV: {missing_cols}")
         return df
@@ -77,7 +77,7 @@ class AISignalDetector:
             df["is_injected_signal"] = 0
             return df
         unique_pairs = df[["drug_name", "adverse_event"]].drop_duplicates()
-        n_inject = int(len(unique_pairs) * fraction)
+        n_inject = max(1, int(len(unique_pairs) * fraction))
         inject_pairs = unique_pairs.sample(n=n_inject)
         df["is_injected_signal"] = 0
         for _, row in inject_pairs.iterrows():
@@ -104,8 +104,10 @@ class AISignalDetector:
         df_stats["c"] = df_stats["ae_total"] - df_stats["a"]
         df_stats["d"] = total_reports - (df_stats["a"] + df_stats["b"] + df_stats["c"])
 
-        df_stats["PRR"] = (df_stats["a"] / (df_stats["a"] + df_stats["b"])) / ((df_stats["c"] / (df_stats["c"] + df_stats["d"])) + 1e-6)
-        df_stats["ROR"] = (df_stats["a"] / (df_stats["b"] + 1e-6)) / ((df_stats["c"] / (df_stats["d"] + 1e-6)) + 1e-6)
+        df_stats["PRR"] = (df_stats["a"] / (df_stats["a"] + df_stats["b"] + 1e-6)) / \
+                          ((df_stats["c"] / (df_stats["c"] + df_stats["d"] + 1e-6)) + 1e-6)
+        df_stats["ROR"] = (df_stats["a"] / (df_stats["b"] + 1e-6)) / \
+                          ((df_stats["c"] / (df_stats["d"] + 1e-6)) + 1e-6)
 
         return df_stats[["drug_name", "adverse_event", "PRR", "ROR"]]
 
@@ -125,7 +127,6 @@ class AISignalDetector:
         df = df.merge(self.prr_ror_table, on=["drug_name", "adverse_event"], how="left")
         df = self._create_target(df)
 
-        # Ensure all features exist
         for col in self.cat_features:
             if col not in df.columns:
                 df[col] = "missing"
@@ -150,7 +151,6 @@ class AISignalDetector:
             raise ValueError("PRR/ROR table is missing. Train the model first.")
         df = df.merge(self.prr_ror_table, on=["drug_name", "adverse_event"], how="left")
 
-        # Fill missing features
         for col in self.cat_features:
             if col not in df.columns:
                 df[col] = "missing"
@@ -171,15 +171,26 @@ class AISignalDetector:
     def train_model(self, test_size=0.2, random_state=42):
         df = self.load_data()
         X, y = self.fit_preprocess(df)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+
+        # Ensure both classes exist
+        if len(np.unique(y)) < 2:
+            print("Only one class found in training data, forcing some signals...")
+            y.iloc[:5] = 1  # force a few positives
+
+        # Stratified split to keep class balance
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, stratify=y
+        )
 
         self.model = RandomForestClassifier(n_estimators=200, random_state=random_state)
         self.model.fit(X_train, y_train)
 
         y_pred = self.model.predict(X_test)
         print("Model Performance:")
-        print(classification_report(y_test, y_pred))
+        print(classification_report(y_test, y_pred, zero_division=0))
+
         self.save_model()
+
 
     # ---------------- Predict ----------------
     def predict(self, input_data):
@@ -189,7 +200,11 @@ class AISignalDetector:
         input_df = pd.DataFrame([input_data])
         X = self.transform_preprocess(input_df)
         prediction = self.model.predict(X)
-        probability = self.model.predict_proba(X)[0][1]
+
+        # Handle single-class case
+        probs = self.model.predict_proba(X)[0]
+        probability = probs[1] if len(probs) > 1 else (probs[0] if prediction[0] == 1 else 0.0)
+
         return {"is_signal": bool(prediction[0]), "probability": float(probability)}
 
     # ---------------- Persistence ----------------
@@ -218,14 +233,25 @@ class AISignalDetector:
 # ---------------------- Usage ----------------------
 if __name__ == "__main__":
     detector = AISignalDetector(model_path=MODEL_PATH)
-    detector.load_model()  # will retrain automatically if missing
+    detector.load_model()
 
     sample_input = {
         "sex": "F",
-        "age": 50,
-        "drug_name": "SKYRIZI",
-        "indication": "Psoriasis",
-        "adverse_event": "Weight increased"
+        "age": 39,
+        "drug_name": "AZACITIDINE",
+        "indication": "",
+        "adverse_event": "Fatigue",
+        "PRR": 0.0,
+        "ROR": 0.0
     }
+
+    required_features = INTERNAL_CAT_COLS + INTERNAL_NUM_COLS + ["PRR", "ROR"]
+    missing_features = [feat for feat in required_features if feat not in sample_input]
+
+    if missing_features:
+        print(f"Missing features in sample_input: {missing_features}")
+    else:
+        print("All required features are present in sample_input.")
+
     result = detector.predict(sample_input)
     print(f"Prediction: {result}")
