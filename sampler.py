@@ -1,7 +1,11 @@
 import pandas as pd
 import os
+from pathlib import Path
 
-def sample_csv(input_file, output_file=None, fraction=0.25, nrows=None, random_state=42):
+
+def sample_csv(
+    input_file, output_file=None, fraction=0.25, nrows=None, random_state=42
+):
     """
     Read a large CSV file and return/save a smaller sample.
 
@@ -42,8 +46,10 @@ def sample_csv(input_file, output_file=None, fraction=0.25, nrows=None, random_s
 
 # ---------------- USAGE ----------------
 if __name__ == "__main__":
-    input_path = "/home/ampara/Downloads/FAERS_merged_25Q2_20250922.csv"      # change to your file
-    output_path = "fears_sampled_dataset.csv"   # output file
+    DATA_DIR = Path(__file__).resolve().parent / "data"
+
+    input_path = DATA_DIR / "faers_sampled_dataset.csv"  # change to your file
+    output_path = "faers_sampled_dataset.csv"  # output file
 
     # Example 1: Get 1/4th of dataset
     sample_csv(input_path, output_file=output_path, fraction=0.25)
