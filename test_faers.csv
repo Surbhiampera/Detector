@@ -1,0 +1,4 @@
+primaryid,caseid,caseversion,fda_dt,age,sex,rpt_country,rpsr_cod,drug_seq,role_cod,drugname,prod_ai,pt,outc_cod,indi_drug_seq,indi_pt,start_dt,end_dt,dur,dur_cod
+247547526,24754752,6,20250623,59.0,F,CA,EXP,138,SS,DESOXIMETASONE,DESOXIMETASONE,Foot deformity,CA,301.0,Product used for unknown indication,,,,
+246890264,24689026,4,20250619,43.0,F,CA,EXP,495,SS,PHTHALYLSULFATHIAZOLE,PHTHALYLSULFATHIAZOLE,Pregnancy,DS,1.0,Product used for unknown indication,,,,
+247894922,24789492,2,20250611,44.0,F,CA,EXP,70,SS,ORENCIA,ABATACEPT,Colitis ulcerative,DE,157.0,Rheumatoid arthritis,,,,

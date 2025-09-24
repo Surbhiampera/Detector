@@ -14,6 +14,7 @@ DATA_PATH = DATA_DIR / "faers_sampled_dataset.csv"
 MODEL_PATH = DATA_DIR / "ai_model.pkl"
 INFERENCE_BATCH_PATH = DATA_DIR / "faers_inference.csv"
 
+# Enhanced FAERS column mapping with additional mappings
 FAERS_COLUMN_MAP = {
     "drugname": "drug_name",
     "prod_ai": "prod_ai",
@@ -28,6 +29,13 @@ FAERS_COLUMN_MAP = {
     "dur_cod": "dur_cod",
     "dur": "dur",
     "fda_dt": "fda_dt",
+    # Additional mappings from normalize_columns_mappings
+    "caseid": "case_id",
+    "caseversion": "case_version",
+    "primaryid": "primary_id",
+    "drug_seq": "drug_sequence",
+    "start_dt": "start_date",
+    "end_dt": "end_date",
 }
 
 INTERNAL_CAT_COLS = [
@@ -59,6 +67,9 @@ class AISignalDetector:
             "is_rare_pair",
         ]
         self.prr_ror_table = None
+        # Configuration flags
+        self.enable_synthetic_injection = False
+        self.prediction_threshold = 0.6
 
     def load_data(self):
         if not DATA_PATH.exists():
@@ -70,18 +81,77 @@ class AISignalDetector:
         print(f"Loaded data columns: {df.columns.tolist()}")
         return df
 
+    def save_model(self):
+        if self.model:
+            joblib.dump(
+                {
+                    "model": self.model,
+                    "label_encoders": self.label_encoders,
+                    "scaler": self.scaler,
+                    "prr_ror_table": self.prr_ror_table,
+                },
+                self.model_path,
+            )
+
+    def load_model(self):
+        if self.model_path.exists():
+            data = joblib.load(self.model_path)
+            self.model = data.get("model")
+            self.label_encoders = data.get("label_encoders", {})
+            self.scaler = data.get("scaler", StandardScaler())
+            self.prr_ror_table = data.get("prr_ror_table")
+        else:
+            print("Model file not found, will retrain on first predict.")
+            self.model = None
+            self.prr_ror_table = None
+
     def normalize_columns(self, df):
+        """
+        Enhanced normalize_columns function that consolidates the functionality
+        from both the original normalize_columns and normalize_columns_mappings.
+
+        Normalizes FAERS-style input DataFrame to a canonical schema
+        with consistent column names and datatypes.
+        """
         df = df.copy()
         df.columns = df.columns.str.lower()
+
+        # Apply FAERS column mapping
         for faers_col, internal_col in FAERS_COLUMN_MAP.items():
             if faers_col.lower() in df.columns:
                 df[internal_col] = df[faers_col.lower()]
+
+        # Handle date fields with enhanced parsing
+        date_fields = ["fda_dt", "start_date", "end_date"]
+        for col in date_fields:
+            if col in df.columns:
+                df[col] = pd.to_datetime(
+                    df[col].astype(str), format="%Y%m%d", errors="coerce"
+                )
+
+        # Ensure required categorical columns exist
         for col in INTERNAL_CAT_COLS:
             if col not in df.columns:
                 df[col] = "missing"
+
+        # Ensure required numerical columns exist
         for col in INTERNAL_NUM_COLS:
             if col not in df.columns:
                 df[col] = 0
+
+        # Handle duration NaNs
+        if "dur" in df.columns:
+            df["dur"] = df["dur"].fillna(0)
+
+        # Ensure canonical signal columns exist (even if empty)
+        required_cols = ["drug_name", "adverse_event"]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = "missing"
+
+        # Drop duplicate columns if any slipped in
+        df = df.loc[:, ~df.columns.duplicated()]
+
         return df
 
     def compute_additional_features(self, df):
@@ -251,11 +321,11 @@ class AISignalDetector:
         severity_score = (
             df.get("outcome", pd.Series(dtype=str))
             .str.upper()
-            .map({"DE": 3, "LT": 3, "HO": 2, "DS": 2, "CA": 2, "RI": 2, "OT": 1})
+            .map({"DE": 3, "LT": 3, "HO": 1, "DS": 2, "CA": 2, "RI": 2, "OT": 1})
             .fillna(0)
         )
         df["is_signal"] = (
-            (severity_score > 1)
+            (severity_score > 2)
             | (df.get("is_injected_signal", 0) == 1)
             | (df.get("is_disproportional_signal", 0) == 1)
         ).astype(int)
@@ -264,7 +334,8 @@ class AISignalDetector:
     def fit_preprocess(self, df):
         df = self.normalize_columns(df)
         df = self.compute_additional_features(df)
-        df = self.inject_synthetic_signals_realistic(df)
+        if self.enable_synthetic_injection:
+            df = self.inject_synthetic_signals_realistic(df)
         self.prr_ror_table = self.compute_prr_ror(df)
         df = df.merge(self.prr_ror_table, on=["drug_name", "adverse_event"], how="left")
         df = df.fillna({"PRR": 1.0, "ROR": 1.0, "is_disproportional_signal": 0})
@@ -317,11 +388,16 @@ class AISignalDetector:
         X, y = self.fit_preprocess(df)
 
         if len(np.unique(y)) < 2:
-            print("Only one class found in training data, forcing some signals...")
-            y.iloc[:5] = 1
+            print(
+                "Only one class found in training data; consider enabling synthetic injection or providing more varied data."
+            )
 
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
+            X,
+            y,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=y if len(np.unique(y)) > 1 else None,
         )
 
         self.model = RandomForestClassifier(
@@ -341,90 +417,37 @@ class AISignalDetector:
             self.train_model()
         input_df = pd.DataFrame([input_data])
         X = self.transform_preprocess(input_df)
-        prediction = self.model.predict(X)
-
         probs = self.model.predict_proba(X)[0]
-        probability = (
-            probs[1] if len(probs) > 1 else (probs[0] if prediction[0] == 1 else 0.0)
-        )
-
-        return {"is_signal": bool(prediction[0]), "probability": float(probability)}
-
-    def save_model(self):
-        if self.model:
-            joblib.dump(
-                {
-                    "model": self.model,
-                    "label_encoders": self.label_encoders,
-                    "scaler": self.scaler,
-                    "prr_ror_table": self.prr_ror_table,
-                },
-                self.model_path,
-            )
-
-    def load_model(self):
-        if self.model_path.exists():
-            data = joblib.load(self.model_path)
-            self.model = data.get("model")
-            self.label_encoders = data.get("label_encoders", {})
-            self.scaler = data.get("scaler", StandardScaler())
-            self.prr_ror_table = data.get("prr_ror_table")
-        else:
-            print("Model file not found, will retrain on first predict.")
-            self.model = None
-            self.prr_ror_table = None
+        probability = probs[1] if len(probs) > 1 else probs[0]
+        is_signal = bool(probability >= self.prediction_threshold)
+        return {"is_signal": is_signal, "probability": float(probability)}
 
     def predict_many(self, df_input, export_csv_path=None):
-        # Load and normalize training data
-        train_df = self.load_data()
-        train_df = self.normalize_columns(train_df).reset_index(drop=True)
+        # Ensure model and PRR/ROR are available
+        if self.model is None or self.prr_ror_table is None:
+            print("Model missing or PRR/ROR table missing, training now...")
+            self.train_model()
 
-        # Normalize input data separately
+        # Normalize input data
         df_input = df_input.copy()
         df_input = self.normalize_columns(df_input).reset_index(drop=True)
 
-        print(f"train_df index unique: {train_df.index.is_unique}")
         print(f"df_input index unique: {df_input.index.is_unique}")
 
-        # Concatenate normalized data
-        combined_df = pd.concat([train_df, df_input], ignore_index=True)
+        # Compute features on input only (avoid leakage)
+        df_features = self.compute_additional_features(df_input)
 
-        # 🔍 Ensure no duplicate columns
-        if not combined_df.columns.is_unique:
-            dupes = combined_df.columns[combined_df.columns.duplicated()].tolist()
-            print("⚠️ Duplicate columns detected in combined_df:", dupes)
-            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
-
-        print(f"combined_df index unique: {combined_df.index.is_unique}")
-
-        # Compute features and PRR/ROR
-        combined_df = self.compute_additional_features(combined_df)
-
-        # 🔍 Ensure no duplicate columns after feature computation
-        if not combined_df.columns.is_unique:
-            dupes = combined_df.columns[combined_df.columns.duplicated()].tolist()
-            print(
-                "⚠️ Duplicate columns detected after compute_additional_features:", dupes
-            )
-            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
-
-        prr_ror_cumulative = self.compute_prr_ror(combined_df)
-
-        # Already-normalized input
-        df_input_norm = df_input.loc[:, ~df_input.columns.duplicated()]
-        X = self.transform_preprocess(df_input_norm, prr_ror_table=prr_ror_cumulative)
+        # Transform with training PRR/ROR table
+        X = self.transform_preprocess(df_features, prr_ror_table=self.prr_ror_table)
 
         # Run model predictions
-        predictions = self.model.predict(X)
         probs = self.model.predict_proba(X)
-        probability = [
-            p[1] if len(p) > 1 else (p[0] if pred == 1 else 0.0)
-            for p, pred in zip(probs, predictions)
-        ]
+        probability = [p[1] if len(p) > 1 else p[0] for p in probs]
+        predictions = [int(p >= self.prediction_threshold) for p in probability]
 
-        # Merge with PRR/ROR results
-        df_merged = df_input_norm.merge(
-            prr_ror_cumulative.loc[:, ~prr_ror_cumulative.columns.duplicated()],
+        # Merge input with training PRR/ROR for transparency
+        df_merged = df_input.merge(
+            self.prr_ror_table.loc[:, ~self.prr_ror_table.columns.duplicated()],
             on=["drug_name", "adverse_event"],
             how="left",
         )
@@ -432,7 +455,7 @@ class AISignalDetector:
         df_merged["is_signal"] = predictions
         df_merged["probability"] = probability
 
-        result_cols = df_input_norm.columns.tolist() + [
+        result_cols = df_input.columns.tolist() + [
             "PRR",
             "ROR",
             "is_disproportional_signal",
@@ -451,95 +474,41 @@ class AISignalDetector:
 
         return df_result
 
-    def normalize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Normalize FAERS-style input DataFrame to a canonical schema
-        with consistent column names and datatypes.
-        """
-
-        # Define mapping from raw FAERS names → canonical names
-        col_map = {
-            "drugname": "drug_name",
-            "pt": "adverse_event",
-            "indi_pt": "indication",
-            "prod_ai": "active_ingredient",
-            "rpt_country": "country",  # 👈 match pipeline
-            "outc_cod": "outcome",  # 👈 match pipeline
-            "role_cod": "role_cod",  # 👈 unchanged
-            "caseid": "case_id",
-            "caseversion": "case_version",
-            "primaryid": "primary_id",
-            "fda_dt": "fda_date",
-            "drug_seq": "drug_sequence",
-            "indi_drug_seq": "indication_sequence",
-            "sex": "sex",
-            "age": "age",
-            "dur": "dur",  # 👈 keep as pipeline expects
-            "dur_cod": "dur_cod",  # 👈 keep as pipeline expects
-            "start_dt": "start_date",
-            "end_dt": "end_date",
-        }
-        # Rename columns if they exist in the DataFrame
-        df = df.rename(columns={c: col_map[c] for c in df.columns if c in col_map})
-
-        # Coerce date fields to datetime (invalid → NaT)
-        for col in ["start_date", "end_date", "fda_date"]:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors="coerce", format="%Y%m%d")
-
-        # Handle duration NaNs
-        if "duration" in df.columns:
-            df["duration"] = df["duration"].fillna(0)
-
-        # Ensure canonical signal columns exist (even if empty)
-        required_cols = ["drug_name", "adverse_event"]
-        for col in required_cols:
-            if col not in df.columns:
-                df[col] = None  # placeholder if missing
-
-        # Drop duplicate columns if any slipped in
-        df = df.loc[:, ~df.columns.duplicated()]
-
-        return df
-
 
 # ---------------------- Usage ----------------------
 if __name__ == "__main__":
     detector = AISignalDetector(model_path=MODEL_PATH)
     detector.load_model()
 
-    sample_data = pd.DataFrame(
+    sample1 = pd.DataFrame(
         {
-            "primaryid": [247547526, 246890264, 247894922],
-            "caseid": [24754752, 24689026, 24789492],
-            "caseversion": [6, 4, 2],
-            "fda_dt": [20250623, 20250619, 20250611],
-            "age": [59.0, 43.0, 44.0],
-            "sex": ["F", "F", "F"],
-            "rpt_country": ["CA", "CA", "CA"],
-            "rpsr_cod": ["EXP", "EXP", "EXP"],
-            "drug_seq": [138, 495, 70],
-            "role_cod": ["SS", "SS", "SS"],
-            "drugname": ["DESOXIMETASONE", "PHTHALYLSULFATHIAZOLE", "ORENCIA"],
-            "prod_ai": ["DESOXIMETASONE", "PHTHALYLSULFATHIAZOLE", "ABATACEPT"],
-            "pt": ["Foot deformity", "Pregnancy", "Colitis ulcerative"],
-            "outc_cod": ["CA", "DS", "DE"],
-            "indi_drug_seq": [301.0, 1.0, 157.0],
-            "indi_pt": [
-                "Product used for unknown indication",
-                "Product used for unknown indication",
-                "Rheumatoid arthritis",
+            "primary_id": [1001, 1002, 1003],
+            "case_id": [2001, 2002, 2003],
+            "case_version": [1, 1, 2],
+            "fda_date": [20250610, 20250615, 20250620],
+            "age": [65, 34, 78],
+            "sex": ["M", "F", "M"],
+            "country": ["US", "US", "JP"],
+            "role_cod": ["PS", "SS", "SS"],
+            "drug_sequence": [1, 2, 3],
+            "drug_name": ["ATORVASTATIN", "METFORMIN", "ASPIRIN"],
+            "active_ingredient": ["ATORVASTATIN", "METFORMIN", "ACETYLSALICYLIC ACID"],
+            "adverse_event": ["Myalgia", "Diarrhoea", "GI bleed"],
+            "outcome": ["HO", "DS", "LT"],
+            "indication_sequence": [1.0, 1.0, 2.0],
+            "indication": [
+                "Hyperlipidemia",
+                "Type 2 Diabetes",
+                "Cardiovascular prevention",
             ],
-            "start_dt": ["", "", ""],
-            "end_dt": ["", "", ""],
-            "dur": [np.nan, np.nan, np.nan],
-            "dur_cod": ["", "", ""],
+            "start_date": [20240101, 20240215, 20240301],
+            "end_date": ["", "", ""],
+            "dur": [180, 90, np.nan],
+            "dur_cod": ["DY", "DY", ""],
         }
     )
 
-    normalize_columns = detector.normalize_columns(sample_data)
+    df_norm = detector.normalize_columns(sample1)
 
-    results = detector.predict_many(
-        normalize_columns, export_csv_path="test_results.csv"
-    )
+    results = detector.predict_many(df_norm, export_csv_path="test_results_sample1.csv")
     print(results)

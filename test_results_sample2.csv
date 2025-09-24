@@ -1,0 +1,4 @@
+primary_id,case_id,case_version,fda_date,age,sex,country,role_cod,drug_sequence,drug_name,active_ingredient,adverse_event,outcome,indication_sequence,indication,start_date,end_date,dur,dur_cod,exposure_days,report_recency_days,PRR,ROR,is_disproportional_signal,is_rare_pair,is_signal,probability
+1101,2101,1,20250605,45,F,CA,SS,10,OBSCUREDRUGX,X-CHEMICAL,Unusual rash,DS,5.0,Unknown,,,120.0,DY,0,0,,,,,0,0.11
+1102,2102,1,20250607,52,M,US,PS,20,RAREDRUGY,Y-SUBSTANCE,Liver failure,DE,1.0,Cancer,,,0.0,,0,0,,,,,1,0.9
+1103,2103,1,20250609,28,F,DE,SS,30,NEWDRUGZ,Z-COMPOUND,Unexpected pregnancy,HO,2.0,Contraception,,,60.0,DY,0,0,,,,,0,0.095
