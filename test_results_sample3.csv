@@ -1,4 +1,4 @@
-primary_id,case_id,case_version,fda_date,age,sex,country,role_cod,drug_sequence,drug_name,active_ingredient,adverse_event,outcome,indication_sequence,indication,start_date,end_date,dur,dur_cod,PRR,ROR,is_disproportional_signal,is_rare_pair,is_signal,probability
-1201,2201,2,2025-05-25,,F,FR,SS,101,INSULIN,INSULIN,Hypoglycemia,LT,1.0,Diabetes,,,,,999999.0000010001,1000000000000.0,0,,1,0.97
-1202,2202,1,2025-05-30,70.0,,GB,SS,102,PARACETAMOL,ACETAMINOPHEN,Liver toxicity,,,,2025-03-01,,30.0,DY,999999.0000010001,1000000000000.0,0,,1,0.645
-1203,2203,3,2025-06-02,50.0,M,US,PS,103,IBUPROFEN,IBUPROFEN,GI upset,DS,2.0,Pain,2025-04-01,,14.0,DY,1436.781607131061,1438.8489187930231,0,,1,0.95
+primary_id,case_id,case_version,fda_date,age,sex,country,role_cod,drug_sequence,drug_name,active_ingredient,adverse_event,outcome,indication_sequence,indication,start_date,end_date,dur,dur_cod,exposure_days,report_recency_days,PRR,ROR,is_disproportional_signal,is_rare_pair,is_signal,probability
+1201,2201,2,20250525,,F,FR,SS,101,INSULIN,INSULIN,Hypoglycemia,LT,1.0,Diabetes,,,0.0,,0,0,,,,,1,0.76
+1202,2202,1,20250530,70.0,,GB,SS,102,PARACETAMOL,ACETAMINOPHEN,Liver toxicity,,,,,,30.0,DY,0,0,,,,,0,0.025
+1203,2203,3,20250602,50.0,M,US,PS,103,IBUPROFEN,IBUPROFEN,GI upset,DS,2.0,Pain,,,14.0,DY,0,0,,,,,0,0.05

@@ -12,7 +12,7 @@ from datetime import datetime
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_PATH = DATA_DIR / "faers_sampled_dataset.csv"
 MODEL_PATH = DATA_DIR / "ai_model.pkl"
-INFERENCE_BATCH_PATH = DATA_DIR / "faers_inference.csv"
+INFERENCE_BATCH_PATH = "faers_sampled_dataset_20k_set2.csv"
 
 # Enhanced FAERS column mapping with additional mappings
 FAERS_COLUMN_MAP = {
@@ -480,35 +480,61 @@ if __name__ == "__main__":
     detector = AISignalDetector(model_path=MODEL_PATH)
     detector.load_model()
 
-    sample1 = pd.DataFrame(
-        {
-            "primary_id": [1001, 1002, 1003],
-            "case_id": [2001, 2002, 2003],
-            "case_version": [1, 1, 2],
-            "fda_date": [20250610, 20250615, 20250620],
-            "age": [65, 34, 78],
-            "sex": ["M", "F", "M"],
-            "country": ["US", "US", "JP"],
-            "role_cod": ["PS", "SS", "SS"],
-            "drug_sequence": [1, 2, 3],
-            "drug_name": ["ATORVASTATIN", "METFORMIN", "ASPIRIN"],
-            "active_ingredient": ["ATORVASTATIN", "METFORMIN", "ACETYLSALICYLIC ACID"],
-            "adverse_event": ["Myalgia", "Diarrhoea", "GI bleed"],
-            "outcome": ["HO", "DS", "LT"],
-            "indication_sequence": [1.0, 1.0, 2.0],
-            "indication": [
-                "Hyperlipidemia",
-                "Type 2 Diabetes",
-                "Cardiovascular prevention",
-            ],
-            "start_date": [20240101, 20240215, 20240301],
-            "end_date": ["", "", ""],
-            "dur": [180, 90, np.nan],
-            "dur_cod": ["DY", "DY", ""],
-        }
-    )
+    # sample4 = pd.DataFrame(
+    #     {
+    #         "primary_id": list(range(1101, 1116)),
+    #         "case_id": list(range(2101, 2116)),
+    #         "case_version": [1]*15,
+    #         "fda_date": [
+    #             20250601, 20250602, 20250603, 20250604, 20250605,
+    #             20250606, 20250607, 20250608, 20250609, 20250610,
+    #             20250611, 20250612, 20250613, 20250614, 20250615
+    #         ],
+    #         "age": [45, 52, 28, 33, 60, 40, 29, 55, 38, 47, 50, 31, 27, 44, 36],
+    #         "sex": ["F", "M", "F", "M", "F", "M", "F", "M", "F", "M", "F", "M", "F", "M", "F"],
+    #         "country": ["CA", "US", "DE", "FR", "UK", "IN", "JP", "AU", "BR", "IT", "CN", "ES", "MX", "KR", "ZA"],
+    #         "role_cod": ["SS", "PS", "SS", "PS", "SS", "PS", "SS", "PS", "SS", "PS", "SS", "PS", "SS", "PS", "SS"],
+    #         "drug_sequence": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150],
+    #         "drug_name": [
+    #             "OBSCUREDRUGX", "RAREDRUGY", "NEWDRUGZ", "EXPERIMENTAL1", "MEDICINEA",
+    #             "SUPPLEMENTB", "THERAPYC", "CUREALLD", "NOVELDRUGE", "REMEDYF",
+    #             "TREATMENTG", "HEALINGH", "PILLX", "TABLETY", "CAPSULEZ"
+    #         ],
+    #         "active_ingredient": [
+    #             "X-CHEMICAL", "Y-SUBSTANCE", "Z-COMPOUND", "A-COMPOUND", "B-CHEMICAL",
+    #             "C-SUBSTANCE", "D-CHEMICAL", "E-COMPOUND", "F-SUBSTANCE", "G-CHEMICAL",
+    #             "H-COMPOUND", "I-SUBSTANCE", "J-CHEMICAL", "K-COMPOUND", "L-SUBSTANCE"
+    #         ],
+    #         "adverse_event": [
+    #             "Unusual rash", "Liver failure", "Unexpected pregnancy", "Headache",
+    #             "Dizziness", "Nausea", "Fatigue", "Joint pain", "Insomnia", "Fever",
+    #             "Allergic reaction", "Blurred vision", "Vomiting", "Cough", "Palpitations"
+    #         ],
+    #         "outcome": ["DS", "DE", "HO", "DS", "LT", "RC", "DS", "HO", "DE", "LT", "RC", "DS", "HO", "LT", "RC"],
+    #         "indication_sequence": [5, 1, 2, 3, 4, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+    #         "indication": [
+    #             "Unknown", "Cancer", "Contraception", "Pain", "Diabetes",
+    #             "Hypertension", "Flu", "Cold", "Allergy", "Arthritis",
+    #             "Infection", "Migraine", "Asthma", "Depression", "Anxiety"
+    #         ],
+    #         "start_date": [
+    #             20250101, 20250110, 20250115, 20250201, 20250210,
+    #             20250215, 20250301, 20250310, 20250315, 20250401,
+    #             20250410, 20250415, 20250501, 20250510, 20250515
+    #         ],
+    #         "end_date": [
+    #             20250501, "", "", 20250601, "", 20250615, 20250701, "", 20250715, 20250801,
+    #             "", 20250815, "", "", 20250901
+    #         ],
+    #         "dur": [120, np.nan, 60, 90, np.nan, 120, 75, np.nan, 60, 100, np.nan, 80, np.nan, np.nan, 105],
+    #         "dur_cod": ["DY", "", "DY", "DY", "", "DY", "DY", "", "DY", "DY", "", "DY", "", "", "DY"]
+    #     }
+    #     )
 
-    df_norm = detector.normalize_columns(sample1)
+    
+    load_df = pd.read_csv(INFERENCE_BATCH_PATH, low_memory=False)
 
-    results = detector.predict_many(df_norm, export_csv_path="test_results_sample1.csv")
+    df_norm = detector.normalize_columns(load_df)
+
+    results = detector.predict_many(df_norm, export_csv_path="test_results_20K_samples_set2.csv")
     print(results)
