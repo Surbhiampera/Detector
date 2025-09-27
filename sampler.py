@@ -49,10 +49,10 @@ if __name__ == "__main__":
     DATA_DIR = Path(__file__).resolve().parent / "data"
 
     input_path = DATA_DIR / "faers_sampled_dataset.csv"  # change to your file
-    output_path = "faers_sampled_dataset_20k_set2.csv"  # output file
+    output_path = "faers_sampled_dataset_10k_set2.csv"  # output file
 
     # Example 1: Get 1/4th of dataset
     # sample_csv(input_path, output_file=output_path, fraction=0.25)
 
     # Example 2: Get exactly 10000 rows
-    sample_csv(input_path, output_file=output_path, nrows=20000,random_state=65)
+    sample_csv(input_path, output_file=output_path, nrows=10000,random_state=65)

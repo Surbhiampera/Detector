@@ -238,9 +238,14 @@ def _compute_prr_ror_ic(cont: pd.DataFrame) -> pd.DataFrame:
     )
     df["ROR_LCL"] = np.exp(np.log(df["ROR"] + eps) - 1.96 * se_log_ror)
 
+    # Set PRR, ROR, IC to NaN if a < 3 (or your chosen threshold)
+    min_count = 3
+    mask = df["a"] < min_count
+    df.loc[mask, ["PRR", "ROR", "IC", "PRR_LCL", "ROR_LCL"]] = np.nan
+
     # Flags
     df["meets_signal"] = (
-        (df["PRR"] >= 2.0) & (df["a"] >= 3) & (df["PRR_LCL"] > 1.0)
+        (df["PRR"] >= 2.0) & (df["a"] >= min_count) & (df["PRR_LCL"] > 1.0)
     ).astype(int)
 
     return df
@@ -560,14 +565,14 @@ def total_signal_pairs() -> Dict[str, Any]:
 
 
 @app.get("/drug-event-signal-pairs")
-def drug_event_signal_pairs(limit: int = 100) -> Dict[str, Any]:
+def drug_event_signal_pairs(limit: Optional[int] = None) -> Dict[str, Any]:
     _ensure_uploaded()
     cols = [CANON_DRUG, CANON_EVENT, "a", "PRR", "ROR", "IC", "mean_severity"]
-    df = (
-        CACHE.stats[CACHE.stats["meets_signal"] == 1][cols]
-        .sort_values("PRR", ascending=False)
-        .head(limit)
-    )
+    # Only include pairs with a >= 3
+    df = CACHE.stats[(CACHE.stats["meets_signal"] == 1) & (CACHE.stats["a"] >= 3)][cols].sort_values("PRR", ascending=False)
+    if limit is None:
+        limit = len(df)
+    df = df.head(limit)
     return {"signal_pairs": _jsonify_df(df)}
 
 
@@ -775,6 +780,43 @@ async def predict_single(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+
+@app.get("/predicted-dataset")
+def predicted_dataset(limit: int = 1000) -> Dict[str, Any]:
+    """
+    Returns the uploaded dataset with AI predictions (important columns only).
+    """
+    _ensure_uploaded()
+    if CACHE.ai_detector is None or CACHE.raw_df is None:
+        raise HTTPException(status_code=400, detail="AI model or dataset not available.")
+
+    # Run predict_many if not already cached
+    if CACHE.ai_predictions is None:
+        CACHE.ai_predictions = CACHE.ai_detector.predict_many(CACHE.raw_df)
+
+    df = CACHE.ai_predictions.copy()
+    important_cols = [
+        CANON_DRUG,
+        CANON_EVENT,
+        "age",
+        "sex",
+        "country",
+        "outcome",
+        "indication",
+        "dur",
+        "dur_cod",
+        "fda_dt",
+        "is_signal",
+        "probability",
+        "PRR",
+        "ROR",
+        "is_disproportional_signal",
+    ]
+    # Only keep columns that exist
+    cols = [c for c in important_cols if c in df.columns]
+    result = df[cols].head(limit)
+    return {"predicted_dataset": _jsonify_df(result)}
 
 
 # ------------------------------ Visualization Data ------------------------------
