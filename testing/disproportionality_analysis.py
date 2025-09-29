@@ -1,6 +1,5 @@
 import pandas as pd
-from collections import defaultdict
-from report_severity_model import AICaseSeverityClassifier
+from testing.report_severity_model import AICaseSeverityClassifier
 
 # Simple aggregation of reports
 detector = AICaseSeverityClassifier()

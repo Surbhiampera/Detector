@@ -1,5 +1,5 @@
-from disproportionality_analysis import SignalAggregator
-from report_severity_model import AICaseSeverityClassifier
+from testing.disproportionality_analysis import SignalAggregator
+from testing.report_severity_model import AICaseSeverityClassifier
 
 sample_reports = [
     {"sex": "M", "age": 45, "drug_name": "Atorvastatin", "indication": "Headache", "adverse_event": "Liver toxicity"},
