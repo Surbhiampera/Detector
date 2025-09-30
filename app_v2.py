@@ -783,7 +783,7 @@ async def predict_single(
 
 
 @app.get("/predicted-dataset")
-def predicted_dataset(limit: int = 1000) -> Dict[str, Any]:
+def predicted_dataset(limit: Optional[int] = None) -> Dict[str, Any]:
     """
     Returns the uploaded dataset with AI predictions (important columns only).
     """
@@ -796,6 +796,8 @@ def predicted_dataset(limit: int = 1000) -> Dict[str, Any]:
         CACHE.ai_predictions = CACHE.ai_detector.predict_many(CACHE.raw_df)
 
     df = CACHE.ai_predictions.copy()
+    if limit is None:
+        limit = len(df)
     important_cols = [
         CANON_DRUG,
         CANON_EVENT,
@@ -938,7 +940,7 @@ def signal_trends() -> Dict[str, Any]:
 
 @app.get("/drug-event-severity-heatmap")
 def drug_event_severity_heatmap(
-    limit_drugs: int = 20, limit_events: int = 20
+    limit_drugs: int = 50, limit_events: int = 50
 ) -> Dict[str, Any]:
     _ensure_uploaded()
     stats = CACHE.stats
