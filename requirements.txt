@@ -7,3 +7,4 @@ matplotlib
 requests
 mangum
 python-multipart
+python-dotenv
