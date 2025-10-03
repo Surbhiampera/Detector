@@ -3,8 +3,5 @@ uvicorn
 pandas
 numpy
 scikit-learn
-python-dateutil
-jinja2
-starlette
-httpx
-python-multipart
+matplotlib
+requests
