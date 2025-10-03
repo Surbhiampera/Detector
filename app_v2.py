@@ -12,14 +12,15 @@ from fastapi.responses import JSONResponse
 
 # Import the AI signal detector
 from ai_signal_detector import AISignalDetector
-
+import os
 
 app = FastAPI(title="FAERS Signal Detection API", version="2.0.0")
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
 origins = [
-    "http://localhost:8080",  # Example: your frontend application's URL
-    "https://yourfrontenddomain.com",  # Example: your deployed frontend
-    # Add other allowed origins as needed
+    "http://localhost:8080",
+    "http://localhost:4173",
+    ALLOWED_ORIGINS
 ]
 
 app.add_middleware(

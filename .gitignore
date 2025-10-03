@@ -19,7 +19,6 @@ data
 # OS files
 .DS_Store
 Thumbs.db
-
 # Model files
 data/*.pkl
 FAERS_merged_25Q2_20250922_161904.csv
@@ -27,4 +26,5 @@ synthetic_reports.csv
 /data
 /batch
 
-*.csv*
+*.csv
+.env
