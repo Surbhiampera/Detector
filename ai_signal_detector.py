@@ -55,7 +55,7 @@ CURRENT_DATE = datetime(2025, 9, 24)
 
 class AISignalDetector:
     def __init__(self, model_path=None):
-        self.model_path = Path(model_path) if model_path else MODEL_PATH
+        self.model_path = Path(model_path) if model_path else 'ai_model.pkl'
         self.model = None
         self.label_encoders = {}
         self.scaler = StandardScaler()
