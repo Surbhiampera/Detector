@@ -12,7 +12,10 @@ from fastapi.responses import JSONResponse
 
 # Import the AI signal detector
 from ai_signal_detector import AISignalDetector
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 app = FastAPI(title="FAERS Signal Detection API", version="2.0.0")
 
@@ -23,6 +26,7 @@ origins = [
     ALLOWED_ORIGINS
 ]
 
+print(origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
